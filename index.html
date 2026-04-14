@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="description" content="Live Bitcoin price with candlestick chart, dark/light mode, 60-second polling. Built for Summer of Bitcoin 2026." />
+  <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+  <title>BTC — Live Price</title>
+
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('theme');
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = stored === 'dark' || stored === 'light' ? stored : (systemDark ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+  />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@19.2.0",
+        "react/jsx-runtime": "https://esm.sh/react@19.2.0/jsx-runtime",
+        "react-dom/client": "https://esm.sh/react-dom@19.2.0/client?deps=react@19.2.0",
+        "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@5.62.0?deps=react@19.2.0",
+        "lightweight-charts": "https://esm.sh/lightweight-charts@5.1.0",
+        "gsap": "https://esm.sh/gsap@3.12.7"
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg: #fafafa;
+      --bg-elev: #ffffff;
+      --bg-overlay: rgba(10, 10, 10, 0.02);
+      --fg: #0a0a0a;
+      --fg-mute: rgba(10, 10, 10, 0.62);
+      --fg-dim: rgba(10, 10, 10, 0.32);
+      --border: rgba(10, 10, 10, 0.08);
+      --accent: #f7931a;
+      --up: #16a34a;
+      --down: #dc2626;
+      --preloader-bg: #0a0a0a;
+      --preloader-fg: #fafafa;
+
+      --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-in-out-cubic: cubic-bezier(0.65, 0, 0.35, 1);
+      --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+      --dur-fast: 160ms;
+      --dur-med: 320ms;
+      --dur-slow: 640ms;
+      --dur-xslow: 1200ms;
+
+      --font-body: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+      --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+      --gutter: clamp(20px, 4vw, 56px);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0a0a0a;
+      --bg-elev: #141414;
+      --bg-overlay: rgba(250, 250, 250, 0.03);
+      --fg: #fafafa;
+      --fg-mute: rgba(250, 250, 250, 0.62);
+      --fg-dim: rgba(250, 250, 250, 0.32);
+      --border: rgba(250, 250, 250, 0.08);
+      --preloader-bg: #fafafa;
+      --preloader-fg: #0a0a0a;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    html { height: 100%; -webkit-text-size-adjust: 100%; }
+    body {
+      min-height: 100svh;
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.5;
+      background: var(--bg);
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      transition: background var(--dur-slow) var(--ease-out-quart),
+                  color var(--dur-slow) var(--ease-out-quart);
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button {
+      background: transparent;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 3px;
+    }
+
+    #root {
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .shell {
+      flex: 1;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: clamp(28px, 5vh, 56px);
+      width: 100%;
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: var(--gutter);
+    }
+
+    .shell__head,
+    .shell__foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--fg-mute);
+    }
+
+    .stub {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .stub__title {
+      font-family: var(--font-display);
+      font-size: clamp(56px, 11vw, 148px);
+      line-height: 0.92;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      margin: 0;
+    }
+
+    .stub__sub {
+      color: var(--fg-mute);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+    }
+
+    .preloader {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--preloader-bg);
+      color: var(--preloader-fg);
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      will-change: opacity, transform;
+    }
+
+    .preloader__mark {
+      font-family: var(--font-display);
+      font-size: clamp(84px, 16vw, 176px);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      display: flex;
+      align-items: baseline;
+      gap: 0.08em;
+      user-select: none;
+    }
+
+    .preloader__btc {
+      display: inline-block;
+      transform-origin: center;
+    }
+
+    .preloader__word {
+      display: inline-flex;
+      overflow: hidden;
+      line-height: 1.1;
+    }
+
+    .preloader__word > span {
+      display: inline-block;
+      will-change: transform;
+    }
+
+    .preloader__meta {
+      position: absolute;
+      bottom: calc(var(--gutter) * 1.1);
+      left: 0;
+      right: 0;
+      padding: 0 var(--gutter);
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+
+    .cursor {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fafafa;
+      pointer-events: none;
+      z-index: 10000;
+      mix-blend-mode: difference;
+      transform: translate(-50%, -50%);
+      will-change: transform, width, height;
+      transition: width var(--dur-med) var(--ease-out-quart),
+                  height var(--dur-med) var(--ease-out-quart),
+                  border-width var(--dur-med) var(--ease-out-quart);
+    }
+
+    .cursor--expand {
+      width: 44px;
+      height: 44px;
+      background: transparent;
+      border: 1px solid #fafafa;
+    }
+
+    @media (pointer: coarse), (hover: none) {
+      .cursor { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+      .cursor { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="preloader" id="preloader" aria-hidden="true">
+    <div class="preloader__mark">
+      <span class="preloader__btc" id="pre-btc">₿</span>
+      <span class="preloader__word" id="pre-word"></span>
+    </div>
+    <div class="preloader__meta">
+      <span>Summer of Bitcoin · 2026</span>
+      <span id="pre-count">000%</span>
+    </div>
+  </div>
+
+  <div class="cursor" id="cursor" aria-hidden="true"></div>
+
+  <div id="root"></div>
+
+  <script type="module" src="https://esm.sh/tsx"></script>
+  <script type="text/babel" data-type="module" src="./app.tsx"></script>
+</body>
+</html>
