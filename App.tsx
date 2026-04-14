@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { createRoot } from "react-dom/client";
 import gsap from "gsap";
 
 const prefersReducedMotion = () =>
@@ -77,12 +76,7 @@ function useCustomCursor() {
     const el = document.getElementById("cursor");
     if (!el) return;
 
-    if (isCoarsePointer()) {
-      el.style.display = "none";
-      return;
-    }
-
-    if (prefersReducedMotion()) {
+    if (isCoarsePointer() || prefersReducedMotion()) {
       el.style.display = "none";
       return;
     }
@@ -126,7 +120,7 @@ function useCustomCursor() {
   }, []);
 }
 
-function App() {
+export function App() {
   usePreloader();
   useCustomCursor();
 
@@ -149,7 +143,3 @@ function App() {
     </div>
   );
 }
-
-const container = document.getElementById("root");
-if (!container) throw new Error("#root not found");
-createRoot(container).render(<App />);
