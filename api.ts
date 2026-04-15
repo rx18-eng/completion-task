@@ -72,55 +72,82 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   }
 }
 
-interface RawMarket {
-  current_price: number | null;
-  price_change_percentage_24h: number | null;
-  total_volume: number | null;
-  high_24h: number | null;
-  low_24h: number | null;
-  market_cap: number | null;
-  last_updated: string;
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
 }
 
-export async function fetchSummary(signal?: AbortSignal): Promise<PriceSummary> {
-  const rows = await request<RawMarket[]>(
-    "/coins/markets?vs_currency=usd&ids=bitcoin",
-    signal
-  );
-  const row = rows[0];
-  if (!row || row.current_price == null) {
-    throw new ApiError(200, "parse", "No bitcoin market data returned");
-  }
+function numOr(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
 
+function parseMarketRow(row: unknown): PriceSummary {
+  if (!isObject(row)) {
+    throw new ApiError(200, "parse", "Expected market row to be an object");
+  }
+  const price = row.current_price;
+  if (typeof price !== "number" || !Number.isFinite(price)) {
+    throw new ApiError(200, "parse", "Missing or invalid current_price");
+  }
+  const last = row.last_updated;
+  if (typeof last !== "string") {
+    throw new ApiError(200, "parse", "Missing last_updated");
+  }
+  const updatedAt = new Date(last);
+  if (Number.isNaN(updatedAt.getTime())) {
+    throw new ApiError(200, "parse", "Invalid last_updated date");
+  }
   return {
-    price: row.current_price,
-    change24hPct: row.price_change_percentage_24h ?? 0,
-    volume24h: row.total_volume ?? 0,
-    high24h: row.high_24h ?? row.current_price,
-    low24h: row.low_24h ?? row.current_price,
-    marketCap: row.market_cap ?? 0,
-    updatedAt: new Date(row.last_updated),
+    price,
+    change24hPct: numOr(row.price_change_percentage_24h, 0),
+    volume24h: numOr(row.total_volume, 0),
+    high24h: numOr(row.high_24h, price),
+    low24h: numOr(row.low_24h, price),
+    marketCap: numOr(row.market_cap, 0),
+    updatedAt,
   };
 }
 
-type RawCandle = [number, number, number, number, number];
+export async function fetchSummary(signal?: AbortSignal): Promise<PriceSummary> {
+  const data = await request<unknown>(
+    "/coins/markets?vs_currency=usd&ids=bitcoin",
+    signal
+  );
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new ApiError(200, "parse", "Empty market response");
+  }
+  return parseMarketRow(data[0]);
+}
+
+function parseCandle(row: unknown): Candle {
+  if (!Array.isArray(row) || row.length < 5) {
+    throw new ApiError(200, "parse", "Malformed OHLC tuple");
+  }
+  const [ms, open, high, low, close] = row;
+  if (
+    typeof ms !== "number" ||
+    typeof open !== "number" ||
+    typeof high !== "number" ||
+    typeof low !== "number" ||
+    typeof close !== "number"
+  ) {
+    throw new ApiError(200, "parse", "OHLC tuple has non-numeric entries");
+  }
+  return { time: Math.floor(ms / 1000), open, high, low, close };
+}
 
 export async function fetchOhlc(
   timeframe: Timeframe,
   signal?: AbortSignal
 ): Promise<Candle[]> {
   const days = TIMEFRAME_DAYS[timeframe];
-  const raw = await request<RawCandle[]>(
+  const data = await request<unknown>(
     `/coins/bitcoin/ohlc?vs_currency=usd&days=${days}`,
     signal
   );
-  return raw.map(([ms, open, high, low, close]) => ({
-    time: Math.floor(ms / 1000),
-    open,
-    high,
-    low,
-    close,
-  }));
+  if (!Array.isArray(data)) {
+    throw new ApiError(200, "parse", "Expected OHLC array");
+  }
+  return data.map(parseCandle);
 }
 
 const priceFmtLarge = new Intl.NumberFormat("en-US", {

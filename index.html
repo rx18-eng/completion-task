@@ -136,27 +136,176 @@
       color: var(--fg-mute);
     }
 
-    .stub {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 12px;
+    .shell__main {
+      display: grid;
+      place-items: center;
     }
 
-    .stub__title {
+    .card {
+      width: 100%;
+      max-width: 860px;
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: clamp(24px, 4vw, 40px);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(20px, 3vh, 32px);
+      opacity: 0;
+      transform: translateY(16px);
+    }
+
+    html[data-stage="ready"] .card {
+      animation: card-in var(--dur-slow) var(--ease-out-expo) forwards;
+    }
+
+    @keyframes card-in {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card__head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .card__meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--fg-dim);
+    }
+
+    .dot--live {
+      background: var(--up);
+      animation: pulse 1.6s var(--ease-in-out-cubic) infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.35; transform: scale(0.7); }
+    }
+
+    .card__price-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .price {
       font-family: var(--font-display);
-      font-size: clamp(56px, 11vw, 148px);
+      font-size: clamp(56px, 10vw, 128px);
       line-height: 0.92;
       font-weight: 700;
       letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+      margin: 0 -8px;
+      padding: 0 8px;
+      border-radius: 6px;
+      transition: background-color var(--dur-med) var(--ease-out-quart);
+      align-self: flex-start;
+    }
+
+    .price--flash-up {
+      background: color-mix(in oklab, var(--up) 22%, transparent);
+    }
+
+    .price--flash-down {
+      background: color-mix(in oklab, var(--down) 22%, transparent);
+    }
+
+    .change {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    .change--up { color: var(--up); }
+    .change--down { color: var(--down); }
+
+    .change__arrow { font-size: 10px; }
+    .change__label { color: var(--fg-mute); }
+
+    .card__stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: clamp(16px, 2.5vw, 28px);
+      padding-top: clamp(16px, 2vh, 24px);
+      border-top: 1px solid var(--border);
       margin: 0;
     }
 
-    .stub__sub {
-      color: var(--fg-mute);
+    @media (max-width: 640px) {
+      .card__stats { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin: 0;
+    }
+
+    .stat__label { margin: 0; }
+
+    .stat__value {
       font-family: var(--font-mono);
-      font-size: 13px;
-      letter-spacing: 0.04em;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--fg);
+      font-variant-numeric: tabular-nums;
+      margin: 0;
+    }
+
+    .skeleton {
+      display: inline-block;
+      border-radius: 4px;
+      background: linear-gradient(
+        90deg,
+        var(--bg-overlay),
+        color-mix(in oklab, var(--fg) 10%, transparent),
+        var(--bg-overlay)
+      );
+      background-size: 220% 100%;
+      animation: shimmer 1.4s var(--ease-in-out-cubic) infinite;
+    }
+
+    .skeleton--sm { height: 12px; }
+    .skeleton--md { height: 18px; }
+    .skeleton--price {
+      height: clamp(56px, 10vw, 128px);
+      width: min(60%, 440px);
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: -100% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    .card--error {
+      border-color: color-mix(in oklab, var(--down) 50%, var(--border));
+    }
+
+    .eyebrow--error {
+      color: var(--down);
+    }
+
+    .card__error-msg {
+      margin: 0;
+      color: var(--fg-mute);
+      font-size: 14px;
+      line-height: 1.5;
     }
 
     .preloader {
@@ -250,6 +399,8 @@
         transition-duration: 0.001ms !important;
       }
       .cursor { display: none; }
+      .card { opacity: 1; transform: none; }
+      .price { transition: none; }
     }
   </style>
 </head>

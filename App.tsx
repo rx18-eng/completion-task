@@ -1,5 +1,8 @@
 import { useEffect } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import gsap from "gsap";
+import { queryClient } from "./queryClient";
+import { PriceCard } from "./PriceCard";
 
 const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -23,8 +26,13 @@ function usePreloader() {
       return span;
     });
 
+    const markReady = () => {
+      document.documentElement.dataset.stage = "ready";
+    };
+
     if (prefersReducedMotion()) {
       count.textContent = "100%";
+      markReady();
       gsap.set(root, { opacity: 0, delay: 0.2 });
       const t = window.setTimeout(() => root.remove(), 400);
       return () => window.clearTimeout(t);
@@ -36,6 +44,7 @@ function usePreloader() {
     const counter = { n: 0 };
     const tl = gsap.timeline({
       onComplete: () => {
+        markReady();
         gsap.to(root, {
           opacity: 0,
           duration: 0.55,
@@ -125,21 +134,22 @@ export function App() {
   useCustomCursor();
 
   return (
-    <div className="shell">
-      <header className="shell__head">
-        <span className="eyebrow">Bitcoin · USD</span>
-        <span className="eyebrow">SoB · 2026</span>
-      </header>
+    <QueryClientProvider client={queryClient}>
+      <div className="shell">
+        <header className="shell__head">
+          <span className="eyebrow">Bitcoin · USD</span>
+          <span className="eyebrow">SoB · 2026</span>
+        </header>
 
-      <main className="stub">
-        <h1 className="stub__title">Bitcoin</h1>
-        <p className="stub__sub">Scaffolding — live price arrives in commit 3.</p>
-      </main>
+        <main className="shell__main">
+          <PriceCard />
+        </main>
 
-      <footer className="shell__foot">
-        <span className="eyebrow">Data: CoinGecko</span>
-        <span className="eyebrow">Chart: TradingView Lightweight Charts</span>
-      </footer>
-    </div>
+        <footer className="shell__foot">
+          <span className="eyebrow">Data: CoinGecko</span>
+          <span className="eyebrow">Chart: TradingView Lightweight Charts</span>
+        </footer>
+      </div>
+    </QueryClientProvider>
   );
 }
