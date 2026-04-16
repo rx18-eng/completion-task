@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  TIMEFRAMES,
   fetchOhlc,
   fetchSummary,
   type Candle,
@@ -31,6 +32,34 @@ export function useOhlc(timeframe: Timeframe) {
     refetchInterval: OHLC_POLL_MS,
     staleTime: OHLC_STALE_MS,
   });
+}
+
+const DEFAULT_TF: Timeframe = "1D";
+
+function readTimeframeFromURL(): Timeframe {
+  const raw = new URLSearchParams(window.location.search).get("tf");
+  return (TIMEFRAMES as readonly string[]).includes(raw ?? "")
+    ? (raw as Timeframe)
+    : DEFAULT_TF;
+}
+
+export function useTimeframe(): readonly [Timeframe, (next: Timeframe) => void] {
+  const [tf, setTf] = useState<Timeframe>(readTimeframeFromURL);
+
+  const set = useCallback((next: Timeframe) => {
+    const params = new URLSearchParams(window.location.search);
+    if (next === DEFAULT_TF) {
+      params.delete("tf");
+    } else {
+      params.set("tf", next);
+    }
+    const qs = params.toString();
+    const url = (qs ? `?${qs}` : window.location.pathname) + window.location.hash;
+    window.history.replaceState(null, "", url);
+    setTf(next);
+  }, []);
+
+  return [tf, set] as const;
 }
 
 export type Theme = "light" | "dark";

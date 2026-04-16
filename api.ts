@@ -1,5 +1,6 @@
 export type Currency = "usd";
 export type Timeframe = "1D" | "7D" | "30D" | "1Y";
+export const TIMEFRAMES = ["1D", "7D", "30D", "1Y"] as const satisfies readonly Timeframe[];
 
 export interface PriceSummary {
   price: number;

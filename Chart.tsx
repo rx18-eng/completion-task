@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import {
   CandlestickSeries,
   createChart,
@@ -9,30 +17,45 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
-import { describeError, type Candle, type Timeframe } from "./api";
-import { useOhlc, useThemeObserver } from "./hooks";
+import { describeError, TIMEFRAMES, type Candle, type Timeframe } from "./api";
+import { useOhlc, useThemeObserver, useTimeframe } from "./hooks";
 
-interface ChartProps {
-  timeframe: Timeframe;
-}
+const TF_LABELS: Record<Timeframe, string> = {
+  "1D": "1-day",
+  "7D": "7-day",
+  "30D": "30-day",
+  "1Y": "1-year",
+};
 
-export function Chart({ timeframe }: ChartProps) {
+export function Chart() {
+  const [timeframe, setTimeframe] = useTimeframe();
   const query = useOhlc(timeframe);
+
+  const cardProps = {
+    timeframe,
+    onTimeframeChange: setTimeframe,
+    isFetching: query.isFetching,
+  };
 
   if (query.isPending) {
     return (
-      <ChartCard>
+      <ChartCard {...cardProps}>
         <ChartSkeleton />
       </ChartCard>
     );
   }
 
   if (query.isError) {
-    return <ChartError error={query.error} />;
+    const { heading, message } = describeError(query.error);
+    return (
+      <ChartCard {...cardProps} variant="error" heading={heading}>
+        <p className="card__error-msg">{message}</p>
+      </ChartCard>
+    );
   }
 
   return (
-    <ChartCard>
+    <ChartCard {...cardProps}>
       <ChartCanvas data={query.data} />
     </ChartCard>
   );
@@ -40,23 +63,39 @@ export function Chart({ timeframe }: ChartProps) {
 
 interface ChartCardProps {
   children: ReactNode;
+  timeframe: Timeframe;
+  onTimeframeChange: (t: Timeframe) => void;
+  isFetching: boolean;
   variant?: "error";
   heading?: string;
 }
 
-function ChartCard({ children, variant, heading }: ChartCardProps) {
+function ChartCard({
+  children,
+  timeframe,
+  onTimeframeChange,
+  isFetching,
+  variant,
+  heading,
+}: ChartCardProps) {
   const isError = variant === "error";
   return (
     <section
       className={`card chart-card${isError ? " card--error" : ""}`}
-      aria-label="Bitcoin 1-day price history"
+      aria-label={`Bitcoin ${TF_LABELS[timeframe]} price history`}
       role={isError ? "alert" : undefined}
     >
       <header className="card__head">
-        <span className={isError ? "eyebrow eyebrow--error" : "eyebrow"}>
-          {heading ?? "Price History"}
-        </span>
-        <span className="eyebrow">1D · BTC/USD</span>
+        <div className="card__meta">
+          <span className={isError ? "eyebrow eyebrow--error" : "eyebrow"}>
+            {heading ?? "Price History"}
+          </span>
+          <span
+            className={`dot ${isFetching ? "dot--live" : ""}`}
+            aria-hidden="true"
+          />
+        </div>
+        <TimeframeSwitcher value={timeframe} onChange={onTimeframeChange} />
       </header>
       {children}
     </section>
@@ -64,7 +103,9 @@ function ChartCard({ children, variant, heading }: ChartCardProps) {
 }
 
 function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
 }
 
 function baseChartOptions(): DeepPartial<ChartOptions> {
@@ -104,11 +145,7 @@ function seriesColors(): CandlestickSeriesPartialOptions {
   };
 }
 
-interface ChartCanvasProps {
-  data: Candle[];
-}
-
-function ChartCanvas({ data }: ChartCanvasProps) {
+function ChartCanvas({ data }: { data: Candle[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -130,8 +167,7 @@ function ChartCanvas({ data }: ChartCanvasProps) {
     };
   }, []);
 
-  // Push new data. `setData` replaces the full window, which matches CoinGecko's
-  // whole-range response, then `fitContent` re-frames so the latest bar is visible.
+  // Push new data — replaces the full window, then re-frames.
   useEffect(() => {
     const series = seriesRef.current;
     const chart = chartRef.current;
@@ -148,8 +184,7 @@ function ChartCanvas({ data }: ChartCanvasProps) {
     chart.timeScale().fitContent();
   }, [data]);
 
-  // Recolor on theme swap without remount — both applyOptions calls read the
-  // freshly-written CSS variables from :root.
+  // Recolor on theme swap without remount.
   useEffect(() => {
     const chart = chartRef.current;
     const series = seriesRef.current;
@@ -161,13 +196,86 @@ function ChartCanvas({ data }: ChartCanvasProps) {
   return <div ref={containerRef} className="chart-canvas" aria-hidden="true" />;
 }
 
+function TimeframeSwitcher({
+  value,
+  onChange,
+}: {
+  value: Timeframe;
+  onChange: (next: Timeframe) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const btnRefs = useRef<Partial<Record<Timeframe, HTMLButtonElement | null>>>({});
+  const [pill, setPill] = useState({ x: 0, w: 0 });
+
+  // Measure active button position before paint — no flash at stale coords.
+  useLayoutEffect(() => {
+    const btn = btnRefs.current[value];
+    if (!btn) return;
+    setPill({ x: btn.offsetLeft, w: btn.offsetWidth });
+  }, [value]);
+
+  // Re-measure on container resize (window resize, font metrics change, etc.)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(() => {
+      const btn = btnRefs.current[value];
+      if (!btn) return;
+      setPill({ x: btn.offsetLeft, w: btn.offsetWidth });
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [value]);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const idx = TIMEFRAMES.indexOf(value);
+    const dir = e.key === "ArrowRight" ? 1 : -1;
+    const next = TIMEFRAMES[(idx + dir + TIMEFRAMES.length) % TIMEFRAMES.length];
+    onChange(next);
+    btnRefs.current[next]?.focus();
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className="tfs"
+      role="tablist"
+      aria-label="Chart timeframe"
+      onKeyDown={onKeyDown}
+    >
+      <span
+        className="tfs__pill"
+        aria-hidden="true"
+        style={{ transform: `translateX(${pill.x}px)`, width: `${pill.w}px` }}
+      />
+      {TIMEFRAMES.map((t) => (
+        <button
+          key={t}
+          ref={(el) => {
+            btnRefs.current[t] = el;
+          }}
+          className="tfs__btn"
+          type="button"
+          role="tab"
+          aria-selected={t === value}
+          tabIndex={t === value ? 0 : -1}
+          data-interactive
+          onClick={() => onChange(t)}
+        >
+          {t}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ChartSkeleton() {
-  // Stable heights so the shimmer doesn't re-randomize on every re-render.
   const heights = useMemo(() => {
     const out: number[] = [];
     let v = 0.55;
     for (let i = 0; i < 24; i++) {
-      // Deterministic pseudo-random walk — reviewer-friendly, no RNG seed needed.
       v = Math.min(0.95, Math.max(0.25, v + Math.sin(i * 1.7) * 0.12));
       out.push(Math.round(v * 100));
     }
@@ -183,14 +291,5 @@ function ChartSkeleton() {
         />
       ))}
     </div>
-  );
-}
-
-function ChartError({ error }: { error: unknown }) {
-  const { heading, message } = describeError(error);
-  return (
-    <ChartCard variant="error" heading={heading}>
-      <p className="card__error-msg">{message}</p>
-    </ChartCard>
   );
 }

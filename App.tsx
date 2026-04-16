@@ -145,7 +145,7 @@ export function App() {
 
         <main className="shell__main">
           <PriceCard />
-          <Chart timeframe="1D" />
+          <Chart />
         </main>
 
         <footer className="shell__foot">
