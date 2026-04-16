@@ -1,5 +1,5 @@
 import {
-  ApiError,
+  describeError,
   formatChange,
   formatCompact,
   formatPrice,
@@ -101,35 +101,4 @@ function PriceCardError({ error }: { error: unknown }) {
       <p className="card__error-msg">{message}</p>
     </section>
   );
-}
-
-function describeError(error: unknown): { heading: string; message: string } {
-  if (error instanceof ApiError) {
-    switch (error.code) {
-      case "rate_limited":
-        return {
-          heading: "Rate Limited",
-          message: "CoinGecko is rate limiting this session. Retrying automatically.",
-        };
-      case "network":
-        return {
-          heading: "Offline",
-          message: "Network unavailable. Retrying when the connection returns.",
-        };
-      case "parse":
-        return {
-          heading: "Unexpected Response",
-          message: "The API returned data in an unexpected shape.",
-        };
-      case "http":
-        return {
-          heading: `HTTP ${error.status}`,
-          message: "Upstream server error. Retrying automatically.",
-        };
-    }
-  }
-  return {
-    heading: "Error",
-    message: "Couldn't load Bitcoin price.",
-  };
 }

@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import gsap from "gsap";
 import { queryClient } from "./queryClient";
 import { PriceCard } from "./PriceCard";
+import { Chart } from "./Chart";
 import { ThemeToggle } from "./ThemeToggle";
 
 const prefersReducedMotion = () =>
@@ -144,6 +145,7 @@ export function App() {
 
         <main className="shell__main">
           <PriceCard />
+          <Chart timeframe="1D" />
         </main>
 
         <footer className="shell__foot">

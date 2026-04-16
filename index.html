@@ -137,8 +137,10 @@
     }
 
     .shell__main {
-      display: grid;
-      place-items: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(20px, 3vh, 32px);
     }
 
     .card {
@@ -291,6 +293,35 @@
     @keyframes shimmer {
       0%   { background-position: -100% 0; }
       100% { background-position: 200% 0; }
+    }
+
+    .chart-card {
+      gap: clamp(16px, 2vh, 24px);
+    }
+
+    .chart-canvas {
+      width: 100%;
+      height: clamp(280px, 38vh, 420px);
+      position: relative;
+    }
+
+    html[data-stage="ready"] .chart-card {
+      animation-delay: 120ms;
+    }
+
+    .chart-skeleton {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      width: 100%;
+      height: clamp(280px, 38vh, 420px);
+      padding-bottom: 20px;
+    }
+
+    .chart-skeleton__bar {
+      flex: 1;
+      min-width: 3px;
+      border-radius: 2px;
     }
 
     .card--error {
