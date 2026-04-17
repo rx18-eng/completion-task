@@ -13,6 +13,8 @@ import {
 const POLL_MS = 60_000;
 const STALE_MS = 50_000;
 
+export const SUMMARY_STALE_THRESHOLD_MS = 180_000;
+
 // CoinGecko refreshes OHLC every ~15 min; polling faster is wasted quota
 const OHLC_POLL_MS = 5 * 60_000;
 const OHLC_STALE_MS = 4 * 60_000;
@@ -90,6 +92,27 @@ export function useNow(intervalMs = 1000): Date {
     return () => window.clearInterval(id);
   }, [intervalMs]);
   return now;
+}
+
+// navigator.onLine is imperfect (some OS/network configs misreport) but is the
+// only cheap signal available. Combined with per-card ApiError("network")
+// handling, it's enough for a clear UX: banner = "likely offline",
+// per-card retry = "this particular request failed."
+export function useOnline(): boolean {
+  const [online, setOnline] = useState<boolean>(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine
+  );
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => {
+      window.removeEventListener("online", up);
+      window.removeEventListener("offline", down);
+    };
+  }, []);
+  return online;
 }
 
 export type FlashDirection = "up" | "down" | null;

@@ -109,7 +109,7 @@ function numOr(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
-function parseMarketRow(row: unknown): PriceSummary {
+export function parseMarketRow(row: unknown): PriceSummary {
   if (!isObject(row)) {
     throw new ApiError(200, "parse", "Expected market row to be an object");
   }
@@ -147,7 +147,7 @@ export async function fetchSummary(signal?: AbortSignal): Promise<PriceSummary> 
   return parseMarketRow(data[0]);
 }
 
-function parseCandle(row: unknown): Candle {
+export function parseCandle(row: unknown): Candle {
   if (!Array.isArray(row) || row.length < 5) {
     throw new ApiError(200, "parse", "Malformed OHLC tuple");
   }

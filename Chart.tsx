@@ -19,6 +19,7 @@ import {
 } from "lightweight-charts";
 import { describeError, TIMEFRAMES, type Candle, type Timeframe } from "./api";
 import { useMagnetic, useOhlc, useThemeObserver, useTimeframe } from "./hooks";
+import { RetryButton } from "./RetryButton";
 
 const TF_LABELS: Record<Timeframe, string> = {
   "1D": "1-day",
@@ -45,11 +46,22 @@ export function Chart() {
     );
   }
 
-  if (query.isError) {
+  if (query.isError && !query.data) {
     const { heading, message } = describeError(query.error);
     return (
       <ChartCard {...cardProps} variant="error" heading={heading}>
         <p className="card__error-msg">{message}</p>
+        <RetryButton onClick={() => query.refetch()} fetching={query.isFetching} />
+      </ChartCard>
+    );
+  }
+
+  if (query.data.length === 0) {
+    return (
+      <ChartCard {...cardProps}>
+        <div className="chart-empty" role="status">
+          No candles for this timeframe
+        </div>
       </ChartCard>
     );
   }

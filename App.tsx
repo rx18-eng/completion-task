@@ -5,6 +5,7 @@ import { queryClient } from "./queryClient";
 import { PriceCard } from "./PriceCard";
 import { Chart } from "./Chart";
 import { Marquee } from "./Marquee";
+import { OfflineBanner } from "./OfflineBanner";
 import { ThemeToggle } from "./ThemeToggle";
 
 const prefersReducedMotion = () =>
@@ -85,6 +86,7 @@ export function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <OfflineBanner />
       <div className="shell">
         <header className="shell__head">
           <span className="eyebrow">Bitcoin · USD</span>

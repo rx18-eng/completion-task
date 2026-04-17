@@ -9,9 +9,13 @@ const ITEM_GAP = "  ";
 // pattern (span + aria-hidden clone, translateX(-50%) for seamless loop).
 // Pauses on hover. Reduced-motion shows a static snapshot.
 export function Marquee() {
-  const { data } = usePriceSummary();
+  const { data, isError } = usePriceSummary();
+  const hasError = isError && !data;
 
   const line = useMemo(() => {
+    // Keep last-known data visible on transient errors (TanStack Query holds
+    // the previous result during failed refetches) — the PriceCard stale pill
+    // handles the warning separately. Only fall back when no data ever landed.
     const items = data
       ? [
           `BTC ${formatPrice(data.price)}`,
@@ -21,14 +25,17 @@ export function Marquee() {
           `VOL ${formatCompact(data.volume24h)}`,
           `MCAP ${formatCompact(data.marketCap)}`,
         ]
-      : ["— LIVE BTC FEED —"];
+      : [hasError ? "— CONNECTION LOST —" : "— LIVE BTC FEED —"];
     // Trailing divider so the seam between the two copies matches the
     // inter-item separator — visually seamless at the 50% wrap point.
     return items.join(`${ITEM_GAP}${DIVIDER}${ITEM_GAP}`) + `${ITEM_GAP}${DIVIDER}${ITEM_GAP}`;
-  }, [data]);
+  }, [data, hasError]);
 
   return (
-    <div className="marquee" aria-label="Bitcoin live stats">
+    <div
+      className={`marquee${hasError ? " marquee--error" : ""}`}
+      aria-label="Bitcoin live stats"
+    >
       <div className="marquee__track">
         <span className="marquee__line">{line}</span>
         <span className="marquee__line" aria-hidden="true">{line}</span>

@@ -5,8 +5,14 @@ import {
   formatPrice,
   formatRelativeTime,
 } from "./api";
-import { useNow, usePriceFlash, usePriceSummary } from "./hooks";
+import {
+  SUMMARY_STALE_THRESHOLD_MS,
+  useNow,
+  usePriceFlash,
+  usePriceSummary,
+} from "./hooks";
 import { AnimatedPrice } from "./AnimatedPrice";
+import { RetryButton } from "./RetryButton";
 
 export function PriceCard() {
   const query = usePriceSummary();
@@ -14,10 +20,19 @@ export function PriceCard() {
   const flash = usePriceFlash(query.data?.price);
 
   if (query.isPending) return <PriceCardSkeleton />;
-  if (query.isError) return <PriceCardError error={query.error} />;
+  if (query.isError && !query.data)
+    return (
+      <PriceCardError
+        error={query.error}
+        onRetry={() => query.refetch()}
+        fetching={query.isFetching}
+      />
+    );
 
   const { data, isFetching } = query;
   const up = data.change24hPct >= 0;
+  const isStale =
+    now.getTime() - data.updatedAt.getTime() > SUMMARY_STALE_THRESHOLD_MS;
 
   return (
     <section className="card" aria-live="polite">
@@ -31,6 +46,11 @@ export function PriceCard() {
           <span className="eyebrow">
             updated {formatRelativeTime(data.updatedAt, now)}
           </span>
+          {isStale && (
+            <span className="stale-pill" title="Data may be out of date">
+              Stale
+            </span>
+          )}
         </div>
       </header>
 
@@ -90,7 +110,15 @@ function PriceCardSkeleton() {
   );
 }
 
-function PriceCardError({ error }: { error: unknown }) {
+function PriceCardError({
+  error,
+  onRetry,
+  fetching,
+}: {
+  error: unknown;
+  onRetry: () => void;
+  fetching: boolean;
+}) {
   const { heading, message } = describeError(error);
   return (
     <section className="card card--error" role="alert">
@@ -98,6 +126,7 @@ function PriceCardError({ error }: { error: unknown }) {
         <span className="eyebrow eyebrow--error">{heading}</span>
       </header>
       <p className="card__error-msg">{message}</p>
+      <RetryButton onClick={onRetry} fetching={fetching} />
     </section>
   );
 }
