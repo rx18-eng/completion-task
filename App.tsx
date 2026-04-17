@@ -10,9 +10,6 @@ import { ThemeToggle } from "./ThemeToggle";
 const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-const isCoarsePointer = () =>
-  window.matchMedia("(pointer: coarse), (hover: none)").matches;
-
 function usePreloader() {
   useEffect(() => {
     const root = document.getElementById("preloader");
@@ -83,58 +80,8 @@ function usePreloader() {
   }, []);
 }
 
-function useCustomCursor() {
-  useEffect(() => {
-    const el = document.getElementById("cursor");
-    if (!el) return;
-
-    if (isCoarsePointer() || prefersReducedMotion()) {
-      el.style.display = "none";
-      return;
-    }
-
-    gsap.set(el, { x: window.innerWidth / 2, y: window.innerHeight / 2 });
-    const xTo = gsap.quickTo(el, "x", { duration: 0.38, ease: "power3.out" });
-    const yTo = gsap.quickTo(el, "y", { duration: 0.38, ease: "power3.out" });
-
-    const move = (e: MouseEvent) => {
-      xTo(e.clientX);
-      yTo(e.clientY);
-    };
-
-    const isInteractive = (t: EventTarget | null) =>
-      t instanceof HTMLElement &&
-      !!t.closest('button, a, [role="button"], [data-interactive]');
-
-    const over = (e: MouseEvent) => {
-      if (isInteractive(e.target)) el.classList.add("cursor--expand");
-    };
-    const out = (e: MouseEvent) => {
-      if (isInteractive(e.target)) el.classList.remove("cursor--expand");
-    };
-
-    const hide = () => gsap.to(el, { opacity: 0, duration: 0.2 });
-    const show = () => gsap.to(el, { opacity: 1, duration: 0.2 });
-
-    window.addEventListener("mousemove", move);
-    document.addEventListener("mouseover", over);
-    document.addEventListener("mouseout", out);
-    document.addEventListener("mouseleave", hide);
-    document.addEventListener("mouseenter", show);
-
-    return () => {
-      window.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseover", over);
-      document.removeEventListener("mouseout", out);
-      document.removeEventListener("mouseleave", hide);
-      document.removeEventListener("mouseenter", show);
-    };
-  }, []);
-}
-
 export function App() {
   usePreloader();
-  useCustomCursor();
 
   return (
     <QueryClientProvider client={queryClient}>

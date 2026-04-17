@@ -526,31 +526,6 @@
       opacity: 0.7;
     }
 
-    .cursor {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #fafafa;
-      pointer-events: none;
-      z-index: 10000;
-      mix-blend-mode: difference;
-      transform: translate(-50%, -50%);
-      will-change: transform, width, height;
-      transition: width var(--dur-med) var(--ease-out-quart),
-                  height var(--dur-med) var(--ease-out-quart),
-                  border-width var(--dur-med) var(--ease-out-quart);
-    }
-
-    .cursor--expand {
-      width: 44px;
-      height: 44px;
-      background: transparent;
-      border: 1px solid #fafafa;
-    }
-
     /* View Transitions API — disable default crossfade, use radial clip-path */
     ::view-transition-old(root),
     ::view-transition-new(root) {
@@ -601,17 +576,12 @@
       opacity: 1;
     }
 
-    @media (pointer: coarse), (hover: none) {
-      .cursor { display: none; }
-    }
-
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         animation-duration: 0.001ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.001ms !important;
       }
-      .cursor { display: none; }
       .card { opacity: 1; transform: none; }
       .tfs__pill { transition: none; }
       .price { transition: none; }
@@ -643,8 +613,6 @@
       <span id="pre-count">000%</span>
     </div>
   </div>
-
-  <div class="cursor" id="cursor" aria-hidden="true"></div>
 
   <div id="root"></div>
 
