@@ -19,7 +19,6 @@ export function RetryButton({
       onClick={onClick}
       disabled={fetching}
       data-interactive
-      aria-live="polite"
     >
       <span className="retry-btn__glyph" aria-hidden="true">
         ↻

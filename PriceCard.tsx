@@ -35,7 +35,7 @@ export function PriceCard() {
     now.getTime() - data.updatedAt.getTime() > SUMMARY_STALE_THRESHOLD_MS;
 
   return (
-    <section className="card" aria-live="polite">
+    <section className="card">
       <header className="card__head">
         <span className="eyebrow">Bitcoin · USD</span>
         <div className="card__meta" aria-live="off">

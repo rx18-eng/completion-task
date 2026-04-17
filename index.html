@@ -98,11 +98,16 @@
       border: 0;
       padding: 0;
       cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     :focus-visible {
+      outline: 1.5px solid var(--fg);
+      outline-offset: 2px;
+    }
+    .retry-btn:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 3px;
-      border-radius: 3px;
     }
 
     #root {
@@ -276,6 +281,27 @@
 
     @media (max-width: 640px) {
       .card__stats { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 560px) {
+      .shell__foot {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+    }
+
+    @media (pointer: coarse) {
+      .theme-toggle {
+        width: 44px;
+        height: 44px;
+      }
+      .tfs__btn {
+        padding: 10px 14px;
+      }
+      .retry-btn {
+        padding: 12px 18px;
+      }
     }
 
     .stat {
@@ -547,12 +573,12 @@
       left: 0;
       right: 0;
       z-index: 900;
-      height: 36px;
+      min-height: 36px;
+      padding: env(safe-area-inset-top, 0) var(--gutter) 0;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 12px;
-      padding: 0 var(--gutter);
       background: var(--fg);
       color: var(--bg);
       font-family: var(--font-mono);

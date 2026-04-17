@@ -313,6 +313,7 @@ function TimeframeButton({
       type="button"
       role="tab"
       aria-selected={active}
+      aria-label={TF_LABELS[timeframe]}
       tabIndex={active ? 0 : -1}
       data-interactive
       onClick={onClick}

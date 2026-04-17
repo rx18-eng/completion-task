@@ -34,11 +34,11 @@ export function Marquee() {
   return (
     <div
       className={`marquee${hasError ? " marquee--error" : ""}`}
-      aria-label="Bitcoin live stats"
+      aria-hidden="true"
     >
       <div className="marquee__track">
         <span className="marquee__line">{line}</span>
-        <span className="marquee__line" aria-hidden="true">{line}</span>
+        <span className="marquee__line">{line}</span>
       </div>
     </div>
   );
