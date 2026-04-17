@@ -18,7 +18,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { describeError, TIMEFRAMES, type Candle, type Timeframe } from "./api";
-import { useOhlc, useThemeObserver, useTimeframe } from "./hooks";
+import { useMagnetic, useOhlc, useThemeObserver, useTimeframe } from "./hooks";
 
 const TF_LABELS: Record<Timeframe, string> = {
   "1D": "1-day",
@@ -54,9 +54,14 @@ export function Chart() {
     );
   }
 
+  // isRefreshing = refetch or timeframe-swap in progress while the previous
+  // candles are still visible (keepPreviousData in useOhlc holds them). Drives
+  // the chart-canvas crossfade so tf changes feel like a dissolve, not a snap.
+  const isRefreshing = query.isFetching && !query.isPending;
+
   return (
     <ChartCard {...cardProps}>
-      <ChartCanvas data={query.data} />
+      <ChartCanvas data={query.data} isRefreshing={isRefreshing} />
     </ChartCard>
   );
 }
@@ -145,7 +150,7 @@ function seriesColors(): CandlestickSeriesPartialOptions {
   };
 }
 
-function ChartCanvas({ data }: { data: Candle[] }) {
+function ChartCanvas({ data, isRefreshing }: { data: Candle[]; isRefreshing: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -193,7 +198,14 @@ function ChartCanvas({ data }: { data: Candle[] }) {
     series.applyOptions(seriesColors());
   }, [theme]);
 
-  return <div ref={containerRef} className="chart-canvas" aria-hidden="true" />;
+  return (
+    <div
+      ref={containerRef}
+      className="chart-canvas"
+      data-refreshing={isRefreshing ? "true" : undefined}
+      aria-hidden="true"
+    />
+  );
 }
 
 function TimeframeSwitcher({
@@ -251,23 +263,50 @@ function TimeframeSwitcher({
         style={{ transform: `translateX(${pill.x}px)`, width: `${pill.w}px` }}
       />
       {TIMEFRAMES.map((t) => (
-        <button
+        <TimeframeButton
           key={t}
-          ref={(el) => {
+          timeframe={t}
+          active={t === value}
+          onRef={(el) => {
             btnRefs.current[t] = el;
           }}
-          className="tfs__btn"
-          type="button"
-          role="tab"
-          aria-selected={t === value}
-          tabIndex={t === value ? 0 : -1}
-          data-interactive
           onClick={() => onChange(t)}
-        >
-          {t}
-        </button>
+        />
       ))}
     </div>
+  );
+}
+
+function TimeframeButton({
+  timeframe,
+  active,
+  onRef,
+  onClick,
+}: {
+  timeframe: Timeframe;
+  active: boolean;
+  onRef: (el: HTMLButtonElement | null) => void;
+  onClick: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  useMagnetic(ref, 0.22);
+
+  return (
+    <button
+      ref={(el) => {
+        ref.current = el;
+        onRef(el);
+      }}
+      className="tfs__btn"
+      type="button"
+      role="tab"
+      aria-selected={active}
+      tabIndex={active ? 0 : -1}
+      data-interactive
+      onClick={onClick}
+    >
+      {timeframe}
+    </button>
   );
 }
 

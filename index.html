@@ -112,12 +112,24 @@
     .shell {
       flex: 1;
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto 1fr auto auto;
       gap: clamp(28px, 5vh, 56px);
       width: 100%;
       max-width: 1240px;
       margin: 0 auto;
       padding: var(--gutter);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .shell__head,
@@ -203,6 +215,7 @@
     }
 
     .price {
+      display: inline-block;
       font-family: var(--font-display);
       font-size: clamp(56px, 10vw, 128px);
       line-height: 0.92;
@@ -212,8 +225,19 @@
       margin: 0 -8px;
       padding: 0 8px;
       border-radius: 6px;
+      overflow: hidden;
       transition: background-color var(--dur-med) var(--ease-out-quart);
       align-self: flex-start;
+    }
+
+    .animated-price__visual {
+      display: inline-flex;
+      line-height: inherit;
+    }
+
+    .animated-price__char {
+      display: inline-block;
+      will-change: transform, opacity;
     }
 
     .price--flash-up {
@@ -303,6 +327,11 @@
       width: 100%;
       height: clamp(280px, 38vh, 420px);
       position: relative;
+      transition: opacity var(--dur-med) var(--ease-out-quart);
+    }
+
+    .chart-canvas[data-refreshing="true"] {
+      opacity: 0.4;
     }
 
     html[data-stage="ready"] .chart-card {
@@ -368,6 +397,63 @@
 
     .tfs__btn[aria-selected="true"] {
       color: var(--fg);
+    }
+
+    .marquee {
+      width: 100%;
+      overflow: hidden;
+      padding: clamp(12px, 1.6vh, 16px) 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-overlay);
+      -webkit-mask-image: linear-gradient(
+        90deg,
+        transparent,
+        black 8%,
+        black 92%,
+        transparent
+      );
+              mask-image: linear-gradient(
+        90deg,
+        transparent,
+        black 8%,
+        black 92%,
+        transparent
+      );
+      opacity: 0;
+    }
+
+    html[data-stage="ready"] .marquee {
+      animation: marquee-fade-in var(--dur-slow) var(--ease-out-expo) forwards;
+      animation-delay: 240ms;
+    }
+
+    @keyframes marquee-fade-in {
+      to { opacity: 1; }
+    }
+
+    .marquee__track {
+      display: inline-flex;
+      width: max-content;
+      animation: marquee-scroll 40s linear infinite;
+      will-change: transform;
+    }
+
+    .marquee:hover .marquee__track {
+      animation-play-state: paused;
+    }
+
+    .marquee__line {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--fg-mute);
+      white-space: nowrap;
+    }
+
+    @keyframes marquee-scroll {
+      to { transform: translateX(-50%); }
     }
 
     .card--error {
@@ -532,6 +618,17 @@
       .theme-toggle__icon { transition: none; }
       .theme-toggle__sun,
       .theme-toggle__moon { transition: none; }
+      .marquee { opacity: 1; }
+      .marquee__track {
+        animation: none !important;
+        transform: none !important;
+      }
+      .animated-price__char {
+        transform: none !important;
+        opacity: 1 !important;
+      }
+      .chart-canvas { transition: none; opacity: 1; }
+      .chart-canvas[data-refreshing="true"] { opacity: 1; }
     }
   </style>
 </head>

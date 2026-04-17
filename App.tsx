@@ -4,6 +4,7 @@ import gsap from "gsap";
 import { queryClient } from "./queryClient";
 import { PriceCard } from "./PriceCard";
 import { Chart } from "./Chart";
+import { Marquee } from "./Marquee";
 import { ThemeToggle } from "./ThemeToggle";
 
 const prefersReducedMotion = () =>
@@ -147,6 +148,8 @@ export function App() {
           <PriceCard />
           <Chart />
         </main>
+
+        <Marquee />
 
         <footer className="shell__foot">
           <span className="eyebrow">Data: CoinGecko</span>

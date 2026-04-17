@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import gsap from "gsap";
 import {
   TIMEFRAMES,
   fetchOhlc,
@@ -31,6 +32,9 @@ export function useOhlc(timeframe: Timeframe) {
     queryFn: ({ signal }) => fetchOhlc(timeframe, signal),
     refetchInterval: OHLC_POLL_MS,
     staleTime: OHLC_STALE_MS,
+    // Keep last timeframe's candles visible (dimmed) while new one loads —
+    // pairs with the chart-canvas crossfade instead of snapping to skeleton.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -109,4 +113,52 @@ export function usePriceFlash(price: number | undefined): FlashDirection {
   }, [price]);
 
   return flash;
+}
+
+// Magnetic hover — element pulls toward cursor within a radius,
+// springs back when the cursor leaves. Skips on touch + reduced-motion.
+export function useMagnetic<T extends HTMLElement>(
+  ref: RefObject<T | null>,
+  strength = 0.25,
+  padding = 24
+): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    if (
+      window.matchMedia("(pointer: coarse), (hover: none)").matches ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const xTo = gsap.quickTo(el, "x", { duration: 0.4, ease: "power3.out" });
+    const yTo = gsap.quickTo(el, "y", { duration: 0.4, ease: "power3.out" });
+
+    const onMove = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+
+      if (
+        Math.abs(dx) < rect.width / 2 + padding &&
+        Math.abs(dy) < rect.height / 2 + padding
+      ) {
+        xTo(dx * strength);
+        yTo(dy * strength);
+      } else {
+        xTo(0);
+        yTo(0);
+      }
+    };
+
+    window.addEventListener("mousemove", onMove);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      gsap.set(el, { x: 0, y: 0 });
+    };
+  }, [ref, strength, padding]);
 }

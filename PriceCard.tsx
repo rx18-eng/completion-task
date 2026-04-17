@@ -6,6 +6,7 @@ import {
   formatRelativeTime,
 } from "./api";
 import { useNow, usePriceFlash, usePriceSummary } from "./hooks";
+import { AnimatedPrice } from "./AnimatedPrice";
 
 export function PriceCard() {
   const query = usePriceSummary();
@@ -34,12 +35,10 @@ export function PriceCard() {
       </header>
 
       <div className="card__price-row">
-        <div
+        <AnimatedPrice
+          value={data.price}
           className={`price${flash ? ` price--flash-${flash}` : ""}`}
-          aria-label={`Bitcoin price ${formatPrice(data.price)}`}
-        >
-          {formatPrice(data.price)}
-        </div>
+        />
         <div className={`change change--${up ? "up" : "down"}`}>
           <span className="change__arrow" aria-hidden="true">
             {up ? "▲" : "▼"}

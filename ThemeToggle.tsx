@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useMagnetic } from "./hooks";
 
 type Theme = "light" | "dark";
 
@@ -140,6 +141,7 @@ function MoonIcon() {
 
 export function ThemeToggle() {
   const ref = useRef<HTMLButtonElement>(null);
+  useMagnetic(ref, 0.28);
   const { theme, toggle } = useTheme();
   const isDark = theme === "dark";
 
