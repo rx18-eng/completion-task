@@ -322,6 +322,31 @@
       margin: 0;
     }
 
+    .stat__sub {
+      font-size: 10px;
+      color: var(--fg-mute);
+      margin: 0;
+    }
+
+    .stat__value--fees {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .fee-divider {
+      color: var(--fg-mute);
+      opacity: 0.5;
+    }
+
+    .metrics-card__stats {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    @media (max-width: 640px) {
+      .metrics-card__stats { grid-template-columns: repeat(2, 1fr); }
+    }
+
     .skeleton {
       display: inline-block;
       border-radius: 4px;
@@ -360,6 +385,12 @@
 
     .chart-canvas[data-refreshing="true"] {
       opacity: 0.4;
+    }
+
+    .chart-meta {
+      margin: 0;
+      padding-top: 6px;
+      opacity: 0.75;
     }
 
     html[data-stage="ready"] .chart-card {

@@ -1,12 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ApiError,
+  computeHalvingCountdown,
   describeError,
+  fetchJson,
+  formatBlockHeight,
   formatChange,
   formatCompact,
+  formatCountdown,
   formatPrice,
   formatRelativeTime,
+  HALVING_INTERVAL,
+  parseBlock,
   parseCandle,
+  parseFeeEstimates,
   parseMarketRow,
 } from "./api";
 
@@ -199,6 +206,76 @@ describe("formatCompact", () => {
   });
 });
 
+describe("fetchJson CORS/429 classification", () => {
+  const origFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+    vi.unstubAllGlobals();
+  });
+
+  it("classifies an online fetch-throw as rate_limited (CORS hides upstream 429)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("NetworkError")));
+    vi.stubGlobal("navigator", { onLine: true });
+    await expect(fetchJson("https://x.test/")).rejects.toMatchObject({
+      name: "ApiError",
+      code: "rate_limited",
+      status: 0,
+    });
+  });
+
+  it("classifies an offline fetch-throw as network", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("NetworkError")));
+    vi.stubGlobal("navigator", { onLine: false });
+    await expect(fetchJson("https://x.test/")).rejects.toMatchObject({
+      name: "ApiError",
+      code: "network",
+      status: 0,
+    });
+  });
+
+  it("explicit 429 response is still rate_limited", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 429 }))
+    );
+    await expect(fetchJson("https://x.test/")).rejects.toMatchObject({
+      code: "rate_limited",
+      status: 429,
+    });
+  });
+
+  it("non-2xx, non-429 becomes http", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response(null, { status: 503 }))
+    );
+    await expect(fetchJson("https://x.test/")).rejects.toMatchObject({
+      code: "http",
+      status: 503,
+    });
+  });
+
+  it("propagates AbortError unchanged", async () => {
+    const abortErr = Object.assign(new Error("Aborted"), { name: "AbortError" });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortErr));
+    await expect(fetchJson("https://x.test/")).rejects.toBe(abortErr);
+  });
+
+  it("parse error when body is not JSON", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("<html/>", { status: 200 }))
+    );
+    await expect(fetchJson("https://x.test/")).rejects.toMatchObject({
+      code: "parse",
+    });
+  });
+});
+
 describe("formatRelativeTime", () => {
   const now = new Date("2026-04-18T12:00:00.000Z");
   const ago = (secs: number) => new Date(now.getTime() - secs * 1000);
@@ -226,5 +303,139 @@ describe("formatRelativeTime", () => {
   it("clamps future dates to just now", () => {
     const future = new Date(now.getTime() + 5000);
     expect(formatRelativeTime(future, now)).toBe("just now");
+  });
+});
+
+describe("computeHalvingCountdown", () => {
+  const now = new Date("2026-04-18T12:00:00.000Z");
+
+  it("computes next halving boundary at interval multiples", () => {
+    const out = computeHalvingCountdown(800_000, now);
+    expect(out.nextHalvingHeight).toBe(840_000);
+    expect(out.blocksRemaining).toBe(40_000);
+  });
+
+  it("rolls to the following boundary when height already at a multiple", () => {
+    // Block 840,000 is itself a halving block; the NEXT one is 1,050,000.
+    const out = computeHalvingCountdown(840_000, now);
+    expect(out.nextHalvingHeight).toBe(1_050_000);
+    expect(out.blocksRemaining).toBe(HALVING_INTERVAL);
+  });
+
+  it("computes estimatedDate as now + blocks * 600s", () => {
+    const out = computeHalvingCountdown(800_000, now);
+    const expectedMs = now.getTime() + 40_000 * 600 * 1000;
+    expect(out.estimatedDate.getTime()).toBe(expectedMs);
+  });
+
+  it("handles height 0 (genesis) → next boundary at 210,000", () => {
+    const out = computeHalvingCountdown(0, now);
+    expect(out.nextHalvingHeight).toBe(210_000);
+    expect(out.blocksRemaining).toBe(210_000);
+  });
+});
+
+describe("parseBlock", () => {
+  it("extracts height + timestamp from a valid block row", () => {
+    const out = parseBlock({ height: 840_123, timestamp: 1_713_441_600, id: "abc" });
+    expect(out.height).toBe(840_123);
+    expect(out.timestamp).toBe(1_713_441_600);
+  });
+
+  it("throws when not an object", () => {
+    expect(() => parseBlock(null)).toThrow(ApiError);
+    expect(() => parseBlock("block")).toThrow(ApiError);
+    expect(() => parseBlock(42)).toThrow(ApiError);
+  });
+
+  it("throws on invalid height", () => {
+    expect(() => parseBlock({ height: "840000", timestamp: 1 })).toThrow(ApiError);
+    expect(() => parseBlock({ height: -1, timestamp: 1 })).toThrow(ApiError);
+    expect(() => parseBlock({ height: NaN, timestamp: 1 })).toThrow(ApiError);
+    expect(() => parseBlock({ timestamp: 1 })).toThrow(ApiError);
+  });
+
+  it("throws on invalid timestamp", () => {
+    expect(() => parseBlock({ height: 1, timestamp: "now" })).toThrow(ApiError);
+    expect(() => parseBlock({ height: 1, timestamp: -1 })).toThrow(ApiError);
+    expect(() => parseBlock({ height: 1 })).toThrow(ApiError);
+  });
+
+  it("attaches code=parse on failure", () => {
+    try {
+      parseBlock({});
+      expect.fail("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ApiError);
+      expect((e as ApiError).code).toBe("parse");
+    }
+  });
+});
+
+describe("parseFeeEstimates", () => {
+  it("maps all four fee tiers", () => {
+    const out = parseFeeEstimates({
+      fastestFee: 42,
+      halfHourFee: 30,
+      hourFee: 20,
+      economyFee: 8,
+      minimumFee: 1,
+    });
+    expect(out).toEqual({ fastest: 42, halfHour: 30, hour: 20, economy: 8 });
+  });
+
+  it("falls back to 0 for missing / non-numeric tiers", () => {
+    const out = parseFeeEstimates({ fastestFee: 42 });
+    expect(out).toEqual({ fastest: 42, halfHour: 0, hour: 0, economy: 0 });
+  });
+
+  it("throws ApiError(parse) when row is not an object", () => {
+    expect(() => parseFeeEstimates(null)).toThrow(ApiError);
+    expect(() => parseFeeEstimates("fees")).toThrow(ApiError);
+  });
+});
+
+describe("formatBlockHeight", () => {
+  it("adds thousands separators", () => {
+    expect(formatBlockHeight(840_000)).toBe("840,000");
+    expect(formatBlockHeight(1_234_567)).toBe("1,234,567");
+  });
+
+  it("handles small values", () => {
+    expect(formatBlockHeight(0)).toBe("0");
+    expect(formatBlockHeight(42)).toBe("42");
+  });
+});
+
+describe("formatCountdown", () => {
+  it("returns 'now' for 0 or negative", () => {
+    expect(formatCountdown(0)).toBe("now");
+    expect(formatCountdown(-1000)).toBe("now");
+  });
+
+  it("returns minutes under one hour", () => {
+    expect(formatCountdown(5 * 60 * 1000)).toBe("5m");
+    expect(formatCountdown(59 * 60 * 1000)).toBe("59m");
+  });
+
+  it("returns h+m under one day", () => {
+    expect(formatCountdown(3 * 3600 * 1000)).toBe("3h 0m");
+    expect(formatCountdown((3 * 3600 + 25 * 60) * 1000)).toBe("3h 25m");
+  });
+
+  it("returns d+h under one month", () => {
+    expect(formatCountdown(86_400 * 1000)).toBe("1d");
+    expect(formatCountdown((86_400 + 3600 * 5) * 1000)).toBe("1d 5h");
+    expect(formatCountdown(29 * 86_400 * 1000)).toBe("29d");
+  });
+
+  it("returns days for 30..364 days", () => {
+    expect(formatCountdown(30 * 86_400 * 1000)).toBe("30d");
+    expect(formatCountdown(364 * 86_400 * 1000)).toBe("364d");
+  });
+
+  it("returns years with tenths for >= 365 days", () => {
+    expect(formatCountdown(365 * 86_400 * 1000)).toBe("~1.0y");
+    expect(formatCountdown(3.8 * 365 * 86_400 * 1000)).toBe("~3.8y");
   });
 });

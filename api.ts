@@ -20,6 +20,29 @@ export interface Candle {
   close: number;
 }
 
+export interface FeeEstimates {
+  fastest: number;
+  halfHour: number;
+  hour: number;
+  economy: number;
+}
+
+export interface HalvingCountdown {
+  blocksRemaining: number;
+  nextHalvingHeight: number;
+  estimatedDate: Date;
+}
+
+export interface BitcoinMetrics {
+  blockHeight: number;
+  lastBlockTime: Date;
+  fees: FeeEstimates;
+  halving: HalvingCountdown;
+}
+
+export const HALVING_INTERVAL = 210_000;
+const BTC_BLOCK_TIME_S = 600;
+
 export type ApiErrorCode = "rate_limited" | "network" | "http" | "parse";
 
 export class ApiError extends Error {
@@ -44,7 +67,8 @@ export function describeError(error: unknown): { heading: string; message: strin
       case "rate_limited":
         return {
           heading: "Rate Limited",
-          message: "CoinGecko is rate limiting this session. Retrying automatically.",
+          message:
+            "Upstream is rate-limiting this session (free-tier quota). Retrying shortly.",
         };
       case "network":
         return {
@@ -67,6 +91,7 @@ export function describeError(error: unknown): { heading: string; message: strin
 }
 
 const BASE = "https://api.coingecko.com/api/v3";
+const MEMPOOL_BASE = "https://mempool.space/api";
 
 const TIMEFRAME_DAYS: Record<Timeframe, number> = {
   "1D": 1,
@@ -75,20 +100,35 @@ const TIMEFRAME_DAYS: Record<Timeframe, number> = {
   "1Y": 365,
 };
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+// Shared across CoinGecko + mempool.space. On fetch()-level failure while the
+// browser reports online, treat as rate_limited rather than network: CoinGecko
+// drops Access-Control-Allow-Origin on 429s, so the browser eats the response
+// and surfaces a bare TypeError — indistinguishable from a real network drop
+// without this heuristic. Misclassifying as network triggers the 3-retry path,
+// which makes the rate-limit worse.
+export async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(url, {
       signal,
       headers: { accept: "application/json" },
     });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw err;
-    throw new ApiError(0, "network", "Network request failed");
+    const isOffline =
+      typeof navigator !== "undefined" && navigator.onLine === false;
+    if (isOffline) {
+      throw new ApiError(0, "network", "Network request failed");
+    }
+    throw new ApiError(
+      0,
+      "rate_limited",
+      "Upstream unreachable (likely rate-limited — CORS hides 429)"
+    );
   }
 
   if (res.status === 429) {
-    throw new ApiError(429, "rate_limited", "Rate limited by CoinGecko");
+    throw new ApiError(429, "rate_limited", "Rate limited by upstream");
   }
   if (!res.ok) {
     throw new ApiError(res.status, "http", `HTTP ${res.status}`);
@@ -99,6 +139,14 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   } catch {
     throw new ApiError(res.status, "parse", "Invalid JSON response");
   }
+}
+
+async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return fetchJson<T>(`${BASE}${path}`, signal);
+}
+
+async function mempoolRequest<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return fetchJson<T>(`${MEMPOOL_BASE}${path}`, signal);
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -179,6 +227,68 @@ export async function fetchOhlc(
   return data.map(parseCandle);
 }
 
+export function parseBlock(row: unknown): { height: number; timestamp: number } {
+  if (!isObject(row)) {
+    throw new ApiError(200, "parse", "Block is not an object");
+  }
+  const height = row.height;
+  const timestamp = row.timestamp;
+  if (typeof height !== "number" || !Number.isFinite(height) || height < 0) {
+    throw new ApiError(200, "parse", "Invalid block height");
+  }
+  if (typeof timestamp !== "number" || !Number.isFinite(timestamp) || timestamp < 0) {
+    throw new ApiError(200, "parse", "Invalid block timestamp");
+  }
+  return { height, timestamp };
+}
+
+export function parseFeeEstimates(row: unknown): FeeEstimates {
+  if (!isObject(row)) {
+    throw new ApiError(200, "parse", "Fee response is not an object");
+  }
+  return {
+    fastest: numOr(row.fastestFee, 0),
+    halfHour: numOr(row.halfHourFee, 0),
+    hour: numOr(row.hourFee, 0),
+    economy: numOr(row.economyFee, 0),
+  };
+}
+
+// Pure: computes the subsidy-halving window around `height`. Bitcoin halves
+// every 210,000 blocks. The count is the next boundary ≥ height+1, since a
+// halving applies TO the block at that height (not strictly after it).
+export function computeHalvingCountdown(
+  height: number,
+  now: Date = new Date()
+): HalvingCountdown {
+  const halvingsPassed = Math.floor(height / HALVING_INTERVAL);
+  const nextHalvingHeight = (halvingsPassed + 1) * HALVING_INTERVAL;
+  const blocksRemaining = nextHalvingHeight - height;
+  const estimatedMs = blocksRemaining * BTC_BLOCK_TIME_S * 1000;
+  return {
+    blocksRemaining,
+    nextHalvingHeight,
+    estimatedDate: new Date(now.getTime() + estimatedMs),
+  };
+}
+
+export async function fetchBitcoinMetrics(signal?: AbortSignal): Promise<BitcoinMetrics> {
+  const [blocks, feesRaw] = await Promise.all([
+    mempoolRequest<unknown>("/v1/blocks", signal),
+    mempoolRequest<unknown>("/v1/fees/recommended", signal),
+  ]);
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    throw new ApiError(200, "parse", "Empty blocks response");
+  }
+  const { height, timestamp } = parseBlock(blocks[0]);
+  return {
+    blockHeight: height,
+    lastBlockTime: new Date(timestamp * 1000),
+    fees: parseFeeEstimates(feesRaw),
+    halving: computeHalvingCountdown(height),
+  };
+}
+
 const priceFmtLarge = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -207,6 +317,33 @@ export function formatChange(pct: number): string {
 
 export function formatCompact(n: number): string {
   return compactFmt.format(n);
+}
+
+const blockHeightFmt = new Intl.NumberFormat("en-US");
+
+export function formatBlockHeight(height: number): string {
+  return blockHeightFmt.format(height);
+}
+
+// Compact countdown string. Granularity chosen so numbers stay meaningful:
+// over a year use 0.1-year precision; weeks use days; under a day use h+m.
+export function formatCountdown(ms: number): string {
+  if (ms <= 0) return "now";
+  const s = Math.floor(ms / 1000);
+  const days = Math.floor(s / 86400);
+  if (days >= 365) {
+    return `~${(days / 365).toFixed(1)}y`;
+  }
+  if (days >= 30) {
+    return `${days}d`;
+  }
+  if (days >= 1) {
+    const h = Math.floor((s % 86400) / 3600);
+    return h > 0 ? `${days}d ${h}h` : `${days}d`;
+  }
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 export function formatRelativeTime(date: Date, now: Date = new Date()): string {

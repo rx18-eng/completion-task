@@ -3,8 +3,10 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import gsap from "gsap";
 import {
   TIMEFRAMES,
+  fetchBitcoinMetrics,
   fetchOhlc,
   fetchSummary,
+  type BitcoinMetrics,
   type Candle,
   type PriceSummary,
   type Timeframe,
@@ -19,12 +21,26 @@ export const SUMMARY_STALE_THRESHOLD_MS = 180_000;
 const OHLC_POLL_MS = 5 * 60_000;
 const OHLC_STALE_MS = 4 * 60_000;
 
+// mempool.space caches aggressively; 60s matches block-level freshness
+// (~1 block/10min target means most data doesn't change faster anyway).
+const METRICS_POLL_MS = 60_000;
+const METRICS_STALE_MS = 50_000;
+
 export function usePriceSummary() {
   return useQuery<PriceSummary>({
     queryKey: ["btc", "summary"],
     queryFn: ({ signal }) => fetchSummary(signal),
     refetchInterval: POLL_MS,
     staleTime: STALE_MS,
+  });
+}
+
+export function useBitcoinMetrics() {
+  return useQuery<BitcoinMetrics>({
+    queryKey: ["btc", "metrics"],
+    queryFn: ({ signal }) => fetchBitcoinMetrics(signal),
+    refetchInterval: METRICS_POLL_MS,
+    staleTime: METRICS_STALE_MS,
   });
 }
 
@@ -85,12 +101,30 @@ export function useThemeObserver(): Theme {
   return theme;
 }
 
+export function useVisibility(): boolean {
+  const [visible, setVisible] = useState<boolean>(() =>
+    typeof document === "undefined" ? true : document.visibilityState === "visible"
+  );
+  useEffect(() => {
+    const onChange = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, []);
+  return visible;
+}
+
+// Ticks at intervalMs, but pauses when the tab is hidden. On re-show we
+// resync immediately — otherwise countdowns/relative-times can read up to
+// `intervalMs` stale for a beat after the user refocuses.
 export function useNow(intervalMs = 1000): Date {
   const [now, setNow] = useState(() => new Date());
+  const visible = useVisibility();
   useEffect(() => {
+    if (!visible) return;
+    setNow(new Date());
     const id = window.setInterval(() => setNow(new Date()), intervalMs);
     return () => window.clearInterval(id);
-  }, [intervalMs]);
+  }, [intervalMs, visible]);
   return now;
 }
 

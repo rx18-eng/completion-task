@@ -28,6 +28,16 @@ const TF_LABELS: Record<Timeframe, string> = {
   "1Y": "1-year",
 };
 
+// CoinGecko OHLC granularity is fixed by window (free tier):
+//  1-2d → 30m candles, 3-30d → 4h, 31+d → 4d. Surfacing this avoids the
+//  common "why is the 1D chart so jagged?" confusion during review.
+const TF_CANDLE: Record<Timeframe, string> = {
+  "1D": "30-minute candles",
+  "7D": "4-hour candles",
+  "30D": "4-hour candles",
+  "1Y": "4-day candles",
+};
+
 export function Chart() {
   const [timeframe, setTimeframe] = useTimeframe();
   const query = useOhlc(timeframe);
@@ -115,6 +125,11 @@ function ChartCard({
         <TimeframeSwitcher value={timeframe} onChange={onTimeframeChange} />
       </header>
       {children}
+      {!isError && (
+        <p className="eyebrow chart-meta">
+          source · CoinGecko · {TF_CANDLE[timeframe]}
+        </p>
+      )}
     </section>
   );
 }

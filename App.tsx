@@ -4,6 +4,7 @@ import gsap from "gsap";
 import { queryClient } from "./queryClient";
 import { PriceCard } from "./PriceCard";
 import { Chart } from "./Chart";
+import { BitcoinMetrics } from "./BitcoinMetrics";
 import { Marquee } from "./Marquee";
 import { OfflineBanner } from "./OfflineBanner";
 import { ThemeToggle } from "./ThemeToggle";
@@ -96,12 +97,14 @@ export function App() {
         <main className="shell__main">
           <PriceCard />
           <Chart />
+          <BitcoinMetrics />
         </main>
 
         <Marquee />
 
         <footer className="shell__foot">
-          <span className="eyebrow">Data: CoinGecko</span>
+          <span className="eyebrow">Market: CoinGecko</span>
+          <span className="eyebrow">Network: mempool.space</span>
           <span className="eyebrow">Chart: TradingView Lightweight Charts</span>
         </footer>
       </div>
